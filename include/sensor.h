@@ -69,7 +69,7 @@ public:
 
         map["name"] = readings.name + ": ";
         map["temp"] = String(readings.temp, 1);
-        map["humi"] = String(readings.humi, 1) + "%";
+        map["humi"] = String(readings.humi, 1);
         return map;
     }
 

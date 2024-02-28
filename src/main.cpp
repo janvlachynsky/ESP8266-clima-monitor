@@ -16,21 +16,38 @@
 const char DEGREE_SYMBOL[] = {0xB0, '\0'};
 
 const uint32_t LOOP_DELAY_MS = 100;
-const uint32_t PUBLISH_DELAY_MS = 10000;
-const uint32_t POWER_SAVE_DELAY_MS = 10000; // 2 minutes
+const uint32_t PUBLISH_DELAY_MS = 30000; // 30 seconds
+const uint32_t POWER_SAVE_DELAY_MS = 600000; // 10 minutes
 
-const char *ssid = "Homerun-Guest"; // WIFI SSID
-const char *pass = "HomerunPass5"; // WIFI password
+// WIFI credentials
+const char *ssid = "***"; // WIFI SSID
+const char *pass = "***"; // WIFI password
 WiFiClient client;
 
-// Setting up MQTT client
-const char *mqtt_broker = "192.168.0.123";  // MQTT broker IP
-const char *topic = "s1";                   // MQTT topic
-const char *topic1_humi = *topic + "/humi"; // MQTT sub-topic
-const char *mqtt_username = "***";          // MQTT username
-const char *mqtt_password = "***";          // MQTT password
+// MQTT credentials
+const char *mqtt_username = "***"; // MQTT username
+const char *mqtt_password = "***"; // MQTT password
 const int mqtt_port = 1883;
-// PubSubClient clientMqtt(client);
+const char *mqtt_broker = "192.168.0.125"; // MQTT broker IP
+const char *topic = "home";                // MQTT topic base name
+PubSubClient clientMqtt(client);
+
+struct MqttTopics
+{
+  struct Office
+  {
+    const char *temp = "home/office/temp";
+    const char *humi = "home/office/humi";
+  };
+  struct Outside
+  {
+    const char *temp = "home/outside/temp";
+    const char *humi = "home/outside/humi";
+  };
+  Office office;
+  Outside outside;
+};
+MqttTopics mqttTopics;
 
 // BUZZER pin
 uint8_t BUZZER = D1;
@@ -42,7 +59,6 @@ uint8_t BUTTON = D4;
 // OLED pin
 uint8_t OLED_SCL = D7;
 uint8_t OLED_SDA = D6;
-
 
 // Initialize DHT sensor.
 TempSensor<DHT> dht_in("Inside", D2, DHT22);
@@ -65,7 +81,6 @@ void callback(char *topic, byte *payload, unsigned int length)
   Serial.println("-----------------------");
 }
 
-
 void setup()
 {
   // prepare(Serial);
@@ -80,7 +95,7 @@ void setup()
 
   oledDisplay.begin();
   oledDisplay.clearBuffer();
-  oledDisplay.setFont(u8g2_font_ncenB10_tr);
+  oledDisplay.setFont(u8g2_font_ncenR08_tr);
   oledDisplay.drawStr(0, 20, "Connecting to WiFi:");
   oledDisplay.drawStr(0, 40, ssid);
   oledDisplay.sendBuffer();
@@ -88,67 +103,76 @@ void setup()
   Serial.println(" Connecting to ");
   Serial.println(ssid);
 
-  // // Connecting to WiFi
-  // WiFi.begin(ssid, pass);
-  // size_t i = 20;
-  // while (WiFi.status() != WL_CONNECTED)
-  // {
-  //   delay(50);
-  //   Serial.print(".");
-  //   oledDisplay.drawStr(i, 60, ".");
-  //   oledDisplay.sendBuffer();
-  //   i++;
-  // }
+  // Connecting to WiFi
+  WiFi.begin(ssid, pass);
+  size_t i = 20;
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    delay(50);
+    Serial.print(".");
+    oledDisplay.drawStr(i, 60, ".");
+    oledDisplay.sendBuffer();
+    if (i > 120)
+    {
+      oledDisplay.clearBuffer();
+      oledDisplay.setFont(u8g2_font_ncenR08_tr);
+      oledDisplay.drawStr(0, 20, "Connecting to WiFi:");
+      oledDisplay.drawStr(0, 40, ssid);
+      oledDisplay.sendBuffer();
+    }
+    i++;
+  }
 
-  // Serial.println("\nWiFi connected!");
-  // Serial.print("NodeMCU IP address: ");
-  // Serial.println(WiFi.localIP());
+  Serial.println("\nWiFi connected!");
+  Serial.print("NodeMCU IP address: ");
+  Serial.println(WiFi.localIP());
 
-  // connecting to a mqtt broker
-  // clientMqtt.setServer(mqtt_broker, mqtt_port);
-  // clientMqtt.setCallback(callback);
-  // while (!clientMqtt.connected())
-  // {
-  //   String client_id = "esp8266-client-";
-  //   client_id += String(WiFi.macAddress());
-  //   Serial.printf("The client %s connects to the public mqtt broker\n", client_id.c_str());
-  //   if (clientMqtt.connect(client_id.c_str(), mqtt_username, mqtt_password))
-  //   {
-  //     Serial.println("Public emqx mqtt broker connected");
-  //     for (int i = 0; i < 3; i++)
-  //     {
-  //       digitalWrite(LED, LOW);
-  //       delay(50);
-  //       digitalWrite(LED, HIGH);
-  //       delay(50);
-  //     }
-  //   }
-  //   else
-  //   {
-  //     Serial.print("failed with state ");
-  //     Serial.print(clientMqtt.state());
-  //     delay(2000);
-  //   }
-  // }
-  // // publish and subscribe
-  // clientMqtt.publish(topic, "hello sooo");
-  // clientMqtt.subscribe(topic);
+  // Connecting to a MQTT broker
+  clientMqtt.setServer(mqtt_broker, mqtt_port);
+  clientMqtt.setCallback(callback);
+  oledDisplay.clearBuffer();
+  oledDisplay.setFont(u8g2_font_ncenR10_tr);
+  oledDisplay.drawStr(0, 40, "Connecting to MQTT");
+  while (!clientMqtt.connected())
+  {
+    String client_id = "esp8266-client-";
+    client_id += String(WiFi.macAddress());
+    Serial.printf("The client %s connects to the public MQTT broker, ", client_id.c_str());
+    if (clientMqtt.connect(client_id.c_str(), mqtt_username, mqtt_password))
+    {
+      Serial.println("Public MQTT broker connected");
+      for (int i = 0; i < 3; i++)
+      {
+        digitalWrite(LED, LOW);
+        oledDisplay.clearBuffer();
+        oledDisplay.setFont(u8g2_font_ncenR08_tr);
+        oledDisplay.drawStr(0, 20, "MQTT connected! \n");
+        oledDisplay.sendBuffer();
+        delay(50);
+        digitalWrite(LED, HIGH);
+        delay(150);
+      }
+    }
+    else
+    {
+      oledDisplay.clearBuffer();
+      oledDisplay.setFont(u8g2_font_ncenR08_tr);
+      oledDisplay.drawStr(0, 20, "MQTT failed with");
+      oledDisplay.drawStr(0, 40, "state: " + clientMqtt.state());
+      oledDisplay.drawStr(0, 60, "Retrying...");
+      oledDisplay.sendBuffer();
+      Serial.print("Failed with state: ");
+      Serial.print(clientMqtt.state());
+      delay(2000);
+    }
+  }
 }
 
-// void sendMqtt(float temp, float humi
-void writeOutputs() {
-  // Blink LED
-  // digitalWrite(LED, LOW);
-  // digitalWrite(BUZZER, HIGH);
-  // delay(50);
-  // digitalWrite(LED, HIGH);
-  // digitalWrite(BUZZER, LOW);
+// Write sensor data to OLED display
+void writeOutputs()
+{
   dht_in.read();
   dht_out.read();
-  // TemperatureDisplay tempDisplay = TemperatureDisplay(oledDisplay, std::list<ISensor<TempSensorReadings>>{dht_in, dht_out});
-  // TemperatureDisplay outsideTempDisp = TemperatureDisplay(oledDisplay, dht_out);
-  // insideTempDisp.draw(0,20);
-  // outsideTempDisp.draw(0,40);
   auto dht_in_map = dht_in.toMap();
   auto dht_out_map = dht_out.toMap();
 
@@ -162,19 +186,18 @@ void writeOutputs() {
   oledDisplay.drawStr(0, 63, (dht_out_map["temp"] + DEGREE_SYMBOL).c_str());
 
   oledDisplay.setFont(u8g2_font_luBS10_tf);
-  oledDisplay.drawStr(70, 30, (dht_in_map["humi"]).c_str());
-  oledDisplay.drawStr(70, 63, (dht_out_map["humi"]).c_str());
+  oledDisplay.drawStr(70, 30, (dht_in_map["humi"] + "%").c_str());
+  oledDisplay.drawStr(70, 63, (dht_out_map["humi"] + "%").c_str());
 
-  // oledDisplay.setFont(u8g2_font_ncenB14_tr);
   oledDisplay.sendBuffer();
-
   Serial.print(dht_in.toString());
   Serial.print(dht_out.toString());
   Serial.print("\n");
 }
 
 // Handling button for power save mode
-void handleButton(SimpleVirtualThread& powerSaveThread) {
+void handleButton(SimpleVirtualThread &powerSaveThread)
+{
   if (!digitalRead(BUTTON))
   {
     // Wake up display
@@ -190,37 +213,41 @@ void handleButton(SimpleVirtualThread& powerSaveThread) {
   }
 }
 
+void mqttPublish()
+{
+  if (clientMqtt.connected())
+  {
+    clientMqtt.loop();
+    dht_in.read();
+    dht_out.read();
+    auto dht_in_map = dht_in.toMap();
+    auto dht_out_map = dht_out.toMap();
+    clientMqtt.publish(mqttTopics.office.temp, dht_in_map["temp"].c_str());
+    clientMqtt.publish(mqttTopics.office.humi, dht_in_map["humi"].c_str());
+    clientMqtt.publish(mqttTopics.outside.temp, dht_out_map["temp"].c_str());
+    clientMqtt.publish(mqttTopics.outside.humi, dht_out_map["humi"].c_str());
+  }
+  else
+  {
+
+    Serial.println("Client disconnected! Trying to reconnect.");
+    delay(1000);
+    setup();
+  }
+}
 
 SimpleVirtualThread outputThread(LOOP_DELAY_MS, PUBLISH_DELAY_MS, true, writeOutputs);
-SimpleVirtualThread powerSaveThread(LOOP_DELAY_MS, POWER_SAVE_DELAY_MS, false, [](){oledDisplay.setPowerSave(1);});
+SimpleVirtualThread powerSaveThread(LOOP_DELAY_MS, POWER_SAVE_DELAY_MS, false, []()
+                                    { oledDisplay.setPowerSave(1); });
+SimpleVirtualThread mqttThread(LOOP_DELAY_MS, PUBLISH_DELAY_MS, true, mqttPublish);
 
 size_t i = 0;
 void loop()
 {
   bool new_run = outputThread.run();
   powerSaveThread.run();
+  mqttThread.run();
   handleButton(powerSaveThread);
-  // oledDisplay.drawStr(i, 60, ".");
-  // oledDisplay.sendBuffer();
-  // i++;
-  // if (new_run) {
-  //   i = 0;
-  // }
 
   delay(LOOP_DELAY_MS);
-  // if (clientMqtt.connected())
-  // {
-  //   clientMqtt.loop();
-  //   getDHTData();
-  //   delay(600e3);
-  // }
-  // else
-  // {
-  //   Serial.println("Client disconnected! Trying to reconnect.");
-  //   delay(1000);
-  //   setup();
-  // }
 }
-
-
-
