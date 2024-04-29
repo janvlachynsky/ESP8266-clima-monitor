@@ -15,8 +15,8 @@
 
 const char DEGREE_SYMBOL[] = {0xB0, '\0'};
 
-const uint32_t LOOP_DELAY_MS = 100;
-const uint32_t PUBLISH_DELAY_MS = 30000; // 30 seconds
+const uint32_t LOOP_DELAY_MS = 1000;
+const uint32_t PUBLISH_DELAY_MS = 60000; // 60 seconds
 const uint32_t POWER_SAVE_DELAY_MS = 600000; // 10 minutes
 
 // WIFI credentials
@@ -105,15 +105,16 @@ void setup()
 
   // Connecting to WiFi
   WiFi.begin(ssid, pass);
-  size_t i = 20;
+  size_t i = 0;
   while (WiFi.status() != WL_CONNECTED)
   {
     delay(50);
     Serial.print(".");
     oledDisplay.drawStr(i, 60, ".");
     oledDisplay.sendBuffer();
-    if (i > 120)
+    if (i >= 110)
     {
+      i = 0;
       oledDisplay.clearBuffer();
       oledDisplay.setFont(u8g2_font_ncenR08_tr);
       oledDisplay.drawStr(0, 20, "Connecting to WiFi:");
@@ -133,25 +134,26 @@ void setup()
   oledDisplay.clearBuffer();
   oledDisplay.setFont(u8g2_font_ncenR10_tr);
   oledDisplay.drawStr(0, 40, "Connecting to MQTT");
+  size_t attempt = 0;
   while (!clientMqtt.connected())
   {
+    oledDisplay.drawStr(attempt, 60, ".");
+    oledDisplay.sendBuffer();
     String client_id = "esp8266-client-";
     client_id += String(WiFi.macAddress());
     Serial.printf("The client %s connects to the public MQTT broker, ", client_id.c_str());
     if (clientMqtt.connect(client_id.c_str(), mqtt_username, mqtt_password))
     {
       Serial.println("Public MQTT broker connected");
-      for (int i = 0; i < 3; i++)
-      {
-        digitalWrite(LED, LOW);
-        oledDisplay.clearBuffer();
-        oledDisplay.setFont(u8g2_font_ncenR08_tr);
-        oledDisplay.drawStr(0, 20, "MQTT connected! \n");
-        oledDisplay.sendBuffer();
-        delay(50);
-        digitalWrite(LED, HIGH);
-        delay(150);
-      }
+
+      digitalWrite(LED, LOW);
+      // oledDisplay.clearBuffer();
+      // oledDisplay.setFont(u8g2_font_ncenR08_tr);
+      // oledDisplay.drawStr(0, 20, "MQTT connected! \n");
+      // oledDisplay.sendBuffer();
+      delay(50);
+      digitalWrite(LED, HIGH);
+      delay(150);
     }
     else
     {
@@ -164,6 +166,12 @@ void setup()
       Serial.print("Failed with state: ");
       Serial.print(clientMqtt.state());
       delay(2000);
+      if (attempt > 10)
+      {
+        Serial.print("Failed to connect to MQTT broker for 10 times, skip...");
+        break;
+      }
+      attempt++;
     }
   }
 }
@@ -215,25 +223,54 @@ void handleButton(SimpleVirtualThread &powerSaveThread)
 
 void mqttPublish()
 {
-  if (clientMqtt.connected())
-  {
-    clientMqtt.loop();
-    dht_in.read();
-    dht_out.read();
-    auto dht_in_map = dht_in.toMap();
-    auto dht_out_map = dht_out.toMap();
-    clientMqtt.publish(mqttTopics.office.temp, dht_in_map["temp"].c_str());
-    clientMqtt.publish(mqttTopics.office.humi, dht_in_map["humi"].c_str());
-    clientMqtt.publish(mqttTopics.outside.temp, dht_out_map["temp"].c_str());
-    clientMqtt.publish(mqttTopics.outside.humi, dht_out_map["humi"].c_str());
-  }
-  else
-  {
+  dht_in.read();
+  dht_out.read();
+  auto dht_in_map = dht_in.toMap();
+  auto dht_out_map = dht_out.toMap();
 
-    Serial.println("Client disconnected! Trying to reconnect.");
-    delay(1000);
-    setup();
+  if(!clientMqtt.connected())
+  {
+    // TODO: refactor - move to a separate function ()
+    if (WiFi.status() != WL_CONNECTED)
+    {
+      Serial.println("WiFi disconnected, reconnecting...");
+      WiFi.begin(ssid, pass);
+      while (WiFi.status() != WL_CONNECTED)
+      {
+        delay(50);
+        Serial.print(".");
+      }
+      Serial.println("\nWiFi connected!");
+      Serial.print("NodeMCU IP address: ");
+      Serial.println(WiFi.localIP());
+    }
+    Serial.println("MQTT disconnected, reconnecting...");
+    String client_id = "esp8266-client-";
+    client_id += String(WiFi.macAddress());
+    // TODO: refactor - create function for connecting + retrying + logging (WiFi and MQTT)
+    size_t attempt = 0;
+    while (!clientMqtt.connect(client_id.c_str(), mqtt_username, mqtt_password))
+    {
+      Serial.println("MQTT reconnect failed, retrying...");
+      delay(2000);
+      if (attempt > 10)
+      {
+        Serial.print("Failed to connect to MQTT broker for 10 times, skip...");
+        break;
+      }
+      attempt++;
+    }
+    Serial.println("MQTT reconnected");
+
   }
+
+  clientMqtt.loop();
+  bool state = true;
+  state *= clientMqtt.publish(mqttTopics.office.temp, dht_in_map["temp"].c_str());
+  state *= clientMqtt.publish(mqttTopics.office.humi, dht_in_map["humi"].c_str());
+  state *= clientMqtt.publish(mqttTopics.outside.temp, dht_out_map["temp"].c_str());
+  state *= clientMqtt.publish(mqttTopics.outside.humi, dht_out_map["humi"].c_str());
+  Serial.println("Topic published" + String(state ? " successfully" : " failed"));
 }
 
 SimpleVirtualThread outputThread(LOOP_DELAY_MS, PUBLISH_DELAY_MS, true, writeOutputs);
