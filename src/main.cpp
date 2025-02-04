@@ -16,8 +16,8 @@
 const char DEGREE_SYMBOL[] = {0xB0, '\0'};
 
 const uint32_t LOOP_DELAY_MS = 1000;
-const uint32_t PUBLISH_DELAY_MS = 60000; // 60 seconds
-const uint32_t POWER_SAVE_DELAY_MS = 600000; // 10 minutes
+const uint32_t PUBLISH_DELAY_MS = 300'000; // 5 minutes
+const uint32_t POWER_SAVE_DELAY_MS = 600'000; // 10 minutes
 
 // WIFI credentials
 const char *ssid = "***"; // WIFI SSID
@@ -28,7 +28,7 @@ WiFiClient client;
 const char *mqtt_username = "***"; // MQTT username
 const char *mqtt_password = "***"; // MQTT password
 const int mqtt_port = 1883;
-const char *mqtt_broker = "192.168.0.125"; // MQTT broker IP
+const char *mqtt_broker = "homeassistant.local"; // MQTT broker IP
 const char *topic = "home";                // MQTT topic base name
 PubSubClient clientMqtt(client);
 
