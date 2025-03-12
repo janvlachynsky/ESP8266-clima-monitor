@@ -12,7 +12,6 @@
 #define PUBLISH_TIMEOUT_MS 6000
 #define PING_TIMEOUT_MS 6000
 #define SUBACK_TIMEOUT_MS 6000
-#define TEMP_OFFSET -1.5
 
 const char DEGREE_SYMBOL[] = {0xB0, '\0'};
 
@@ -62,7 +61,8 @@ uint8_t OLED_SCL = D7;
 uint8_t OLED_SDA = D6;
 
 // Initialize DHT sensor.
-TempSensor<DHT> dht_in("Inside", D2, DHT22);
+Offsets offsetsIn = {-1.5, 0};
+TempSensor<DHT> dht_in("Inside", D2, DHT22, offsetsIn);
 TempSensor<DHT> dht_out("Outside", D3, DHT21);
 
 // OLED display
@@ -180,7 +180,7 @@ void setup()
 // Write sensor data to OLED display
 void writeOutputs()
 {
-  dht_in.read(TEMP_OFFSET, 0);
+  dht_in.read();
   dht_out.read();
   auto dht_in_map = dht_in.toMap();
   auto dht_out_map = dht_out.toMap();

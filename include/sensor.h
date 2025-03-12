@@ -10,7 +10,7 @@ class ISensor
 {
 public:
     virtual ~ISensor() {}
-    virtual void read(double offsetTemp, double offsetHumi) = 0;
+    virtual void read() = 0;
     virtual String toString() = 0;
     virtual DataStruct toDisplay() = 0;
     virtual std::map<String, String> toMap() = 0;
@@ -21,6 +21,9 @@ struct TempSensorReadings {
     float temp, humi;
 
 };
+struct Offsets {
+    double temp, humi;
+};
 
 // Temperature and humidity ISensor class implementation
 template<typename SensorFamily = DHT>
@@ -30,10 +33,11 @@ public:
     TempSensorReadings readings;
 
     SensorFamily *_sensor;
-    TempSensor(const String name, uint8_t pin, uint8_t type)
+    TempSensor(const String name, uint8_t pin, uint8_t type, Offsets offsets = {0.0, 0.0})
     : readings({name, 0, 0})
     , _pin(pin)
     , _type(type)
+    , _offsets(offsets)
     {
         _sensor = new SensorFamily(_pin, _type);
         pinMode(_pin, INPUT);
@@ -42,17 +46,17 @@ public:
 
     ~TempSensor(){ delete _sensor;}
 
-    void read(double offsetTemp = 0, double offsetHumi = 0)
+    void read()
     {
         readings.temp = _sensor->readTemperature();
         readings.humi = _sensor->readHumidity();
-        if (offsetTemp != 0)
+        if (_offsets.temp != 0)
         {
-            readings.temp += offsetTemp;
+            readings.temp += _offsets.temp;
         }
-        if (offsetHumi != 0)
+        if (_offsets.humi != 0)
         {
-            readings.humi += offsetHumi;
+            readings.humi += _offsets.humi;
         }
     }
 
@@ -84,4 +88,5 @@ public:
 private:
     uint8_t _pin; // Analog pin to read sensor
     uint8_t _type; // DHT type
+    Offsets _offsets; // Temperature and humidity offsets
 };
