@@ -10,7 +10,7 @@ class ISensor
 {
 public:
     virtual ~ISensor() {}
-    virtual void read() = 0;
+    virtual void read(double offsetTemp, double offsetHumi) = 0;
     virtual String toString() = 0;
     virtual DataStruct toDisplay() = 0;
     virtual std::map<String, String> toMap() = 0;
@@ -42,10 +42,18 @@ public:
 
     ~TempSensor(){ delete _sensor;}
 
-    void read() override
+    void read(double offsetTemp = 0, double offsetHumi = 0)
     {
         readings.temp = _sensor->readTemperature();
         readings.humi = _sensor->readHumidity();
+        if (offsetTemp != 0)
+        {
+            readings.temp += offsetTemp;
+        }
+        if (offsetHumi != 0)
+        {
+            readings.humi += offsetHumi;
+        }
     }
 
     String toString() override {

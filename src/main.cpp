@@ -12,6 +12,7 @@
 #define PUBLISH_TIMEOUT_MS 6000
 #define PING_TIMEOUT_MS 6000
 #define SUBACK_TIMEOUT_MS 6000
+#define TEMP_OFFSET -1.5
 
 const char DEGREE_SYMBOL[] = {0xB0, '\0'};
 
@@ -179,7 +180,7 @@ void setup()
 // Write sensor data to OLED display
 void writeOutputs()
 {
-  dht_in.read();
+  dht_in.read(TEMP_OFFSET, 0);
   dht_out.read();
   auto dht_in_map = dht_in.toMap();
   auto dht_out_map = dht_out.toMap();
